@@ -118,6 +118,7 @@ contract OrderBook is Ownable {
         uint256 deadlineTimestamp = block.timestamp + _deadlineDuration;
         uint256 orderId = _nextOrderId++;
 
+        //@audit (Medium) CEI pattern: Ensure the order is created only after the token transfer
         IERC20(_tokenToSell).safeTransferFrom(msg.sender, address(this), _amountToSell);
 
         // Store the order
@@ -155,6 +156,8 @@ contract OrderBook is Ownable {
         uint256 newDeadlineTimestamp = block.timestamp + _newDeadlineDuration;
         IERC20 token = IERC20(order.tokenToSell);
 
+        //@audit (Medium) CEI pattern: Update order details before handle token amount change transfers
+        //@audit Need to create tests for when _newAmountToSell is Greater and Less than order.amountToSell
         // Handle token amount changes
         if (_newAmountToSell > order.amountToSell) {
             // Increasing amount: Transfer additional tokens from seller
@@ -196,9 +199,12 @@ contract OrderBook is Ownable {
 
         // Validation checks
         if (order.seller == address(0)) revert OrderNotFound();
+        //@audit (low) Missing check for msg.sender can buy own order
+        // if (order.seller == msg.sender) revert CannotBuyOwnOrder();
         if (!order.isActive) revert OrderNotActive();
         if (block.timestamp >= order.deadlineTimestamp) revert OrderExpired();
 
+        //@audit (Medium) Fee Calculation Precision
         order.isActive = false;
         uint256 protocolFee = (order.priceInUSDC * FEE) / PRECISION;
         uint256 sellerReceives = order.priceInUSDC - protocolFee;
@@ -207,6 +213,7 @@ contract OrderBook is Ownable {
         iUSDC.safeTransferFrom(msg.sender, order.seller, sellerReceives);
         IERC20(order.tokenToSell).safeTransfer(msg.sender, order.amountToSell);
 
+        //@audit (Medium) CEI pattern: Ensure the order is marked inactive before transferring tokens
         totalFees += protocolFee;
 
         emit OrderFilled(_orderId, msg.sender, order.seller);
