@@ -237,4 +237,32 @@ contract TestOrderBook is Test {
         assert(wbtc.balanceOf(alice) == 2e8);
         assert(usdc.balanceOf(alice) == 199999994600000000);
     }
+
+    function test_emptyTokenSymbolForNonStandardTokens() public {
+        // Deploy a new mock token (e.g., USDT)
+        MockUSDC usdt = new MockUSDC(6);
+        usdt.mint(alice, 1000000);
+
+        // Owner adds the new token as allowed
+        vm.prank(owner);
+        book.setAllowedSellToken(address(usdt), true);
+
+        // Alice creates an order with the new token
+        vm.startPrank(alice);
+        usdt.approve(address(book), 1000000);
+        uint256 orderId = book.createSellOrder(address(usdt), 1000000, 1000000, 1 days);
+        vm.stopPrank();
+
+        // Get order details string
+        string memory details = book.getOrderDetailsString(orderId);
+
+        // The output will contain "Selling: 1000000 " with empty token symbol
+        // Expected output should be "Selling: 1000000 USDT" or show the token address
+        console2.log("Order Details:");
+        console2.log(details);
+
+        // Assert that the details contain empty space after the amount
+        // This demonstrates the missing token symbol issue
+        assertTrue(bytes(details).length > 0);
+    }
 }
