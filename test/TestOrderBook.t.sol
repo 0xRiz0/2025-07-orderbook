@@ -215,4 +215,26 @@ contract TestOrderBook is Test {
 
         assert(usdc.balanceOf(owner) == 5_559e6);
     }
+
+    function test_POC_buyOrder() public {
+        usdc.mint(alice, 200_000e6); // Mint 200,000 USDC for Alice
+
+        // alice creates sell order for wbtc
+        vm.startPrank(alice);
+        wbtc.approve(address(book), 2e8);
+        uint256 aliceId = book.createSellOrder(address(wbtc), 2e8, 180_000e6, 2 days);
+        vm.stopPrank();
+
+        assert(aliceId == 1);
+        assert(wbtc.balanceOf(alice) == 0);
+        assert(wbtc.balanceOf(address(book)) == 2e8);
+
+        vm.startPrank(alice);
+        usdc.approve(address(book), 200_000e6); // Approve the full 200,000 USDC
+        book.buyOrder(aliceId); // alice buys alice wbtc order
+        vm.stopPrank();
+
+        assert(wbtc.balanceOf(alice) == 2e8);
+        assert(usdc.balanceOf(alice) == 199999994600000000);
+    }
 }
