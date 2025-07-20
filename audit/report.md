@@ -46,15 +46,14 @@ Assisting Auditors:
   - [Issues found](#issues-found)
 - [Findings](#findings)
   - [High](#high)
-    - [\[H-1\]](#h-1)
   - [Medium](#medium)
-    - [\[M-1\]](#m-1)
   - [Low](#low)
-    - [\[L-1\]](#l-1)
+    - [[L-1] Fee Calculation Precision Loss Due to Integer Division Rounding](#l-1-fee-calculation-precision-loss-due-to-integer-division-rounding)
   - [Informational](#informational)
-    - [\[I-1\]](#i-1)
+    - [[I-1] Public Function Not Used Internally - Should Be External](#i-1-public-function-not-used-internally---should-be-external)
+    - [[I-2] Empty Token Symbol Returned for Non-Standard Allowed Tokens](#i-2-empty-token-symbol-returned-for-non-standard-allowed-tokens)
+    - [[I-3] Inconsistent Order Existence Check + Code Quality Issue](#i-3-inconsistent-order-existence-check--code-quality-issue)
   - [Gas](#gas)
-    - [\[G-1\]](#g-1)
 
 # Protocol Summary
 
@@ -91,7 +90,7 @@ src/
 | High     | 0                      |
 | Medium   | 0                      |
 | Low      | 1                      |
-| Info     | 2                      |
+| Info     | 3                      |
 | Gas      | 0                      |
 | Total    | 0                      |
 
