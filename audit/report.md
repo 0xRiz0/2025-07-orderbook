@@ -97,10 +97,79 @@ src/
 
 # Findings
 ## Low 
-### [L-1] Public Function Not Used Internally - Should Be External
+### [L-1] Fee Calculation Precision Loss Due to Integer Division Rounding
+
+**Sumary:** The protocol is designed to collect a 3% fee on all order transactions to generate revenue for the platform. The fee calculation uses integer division which rounds down, causing small orders to result in zero fees and allowing users to bypass protocol fees entirely, leading to significant revenue loss.
+
+**Vulnerability Details:** Users frequently place small orders in DeFi protocols, especially for testing or small trades. Attackers can deliberately structure transactions to minimize fees through precision loss exploitation
+```javascript
+function buyOrder(uint256 _orderId) public {
+    // ... validation checks ...
+    
+    order.isActive = false;
+    
+    // @> Integer division rounds down, causing precision loss
+    uint256 protocolFee = (order.priceInUSDC * FEE) / PRECISION;
+    uint256 sellerReceives = order.priceInUSDC - protocolFee;
+    
+    // @> Small orders may result in zero fees due to rounding
+    iUSDC.safeTransferFrom(msg.sender, address(this), protocolFee);
+    iUSDC.safeTransferFrom(msg.sender, order.seller, sellerReceives);
+    IERC20(order.tokenToSell).safeTransfer(msg.sender, order.amountToSell);
+    
+    totalFees += protocolFee;
+    
+    emit OrderFilled(_orderId, msg.sender, order.seller);
+}
+```
+
+**Impact:**
+
+- Protocol loses significant revenue from small orders that should generate fees but result in zero due to rounding
+- Users can exploit the rounding behavior to trade without paying fees by keeping order values below fee threshold
+- Unfair fee distribution where large orders pay proportionally more while small orders pay nothing
+- Potential for systematic fee avoidance through order splitting strategies
+
+**Proof of Concept:** The integer division rounding issue can be demonstrated with specific order values that result in zero fees:
+
+- **Zero Fee Examples:** Orders with priceInUSDC values that result in zero fees due to rounding down:
+```javascript
+// Fee calculation: protocolFee = (priceInUSDC * 3) / 100
+​
+// Example 1: Small order results in zero fee
+uint256 priceInUSDC = 33; // 33 USDC order
+uint256 protocolFee = (33 * 3) / 100 = 99 / 100 = 0; // Rounds down to 0
+// User pays 0 fees instead of expected 0.99 USDC
+​
+// Example 2: Slightly larger order still results in zero fee  
+uint256 priceInUSDC = 32; // 32 USDC order
+uint256 protocolFee = (32 * 3) / 100 = 96 / 100 = 0; // Rounds down to 0
+// User pays 0 fees instead of expected 0.96 USDC
+​
+// Example 3: Threshold where fee becomes non-zero
+uint256 priceInUSDC = 34; // 34 USDC order  
+uint256 protocolFee = (34 * 3) / 100 = 102 / 100 = 1; // Rounds down to 1
+// User pays 1 USDC fee instead of expected 1.02 USDC
+```
+
+**Fee Avoidance Attack:** Malicious users can exploit this by splitting large orders into smaller ones:
+```javascript
+// Instead of one large order:
+// priceInUSDC = 3300 → protocolFee = (3300 * 3) / 100 = 99 USDC
+​
+// Attacker splits into 100 small orders:
+// 100 orders × 33 USDC each = 3300 USDC total
+// Each order: protocolFee = (33 * 3) / 100 = 0 USDC
+// Total fees paid: 100 × 0 = 0 USDC instead of 99 USDC
+```
+
+**Recommended Mitigation:** Implement minimum fee requirements and consider using higher precision calculations to reduce the impact of integer division rounding or an alternative Solution higher precision.
+
+## Informational
+### [I-1] Public Function Not Used Internally - Should Be External
 **Sumary:** Functions should use the most restrictive visibility modifier appropriate for their intended use to optimize gas consumption and improve code clarity. Several functions are marked as public but are never called internally within the contract, meaning they should be marked as external to reduce gas costs and improve the contract's interface design.
 
-**Vulnerability Details:** Gas inefficiency occurs on every function call since public functions generate additional code for internal accessibility. Code clarity issues arise when function visibility doesn't match actual usage patterns
+**Vulnerability Details:** Gas inefficiency occurs on every function call since public functions generate additional code for internal accessibility. Code clarity issues arise when function visibility doesn't match actual usage patterns.
 
 ```javascript
 contract OrderBook is Ownable {
@@ -220,15 +289,3 @@ Change the visibility of functions that are only called externally from `public`
       // Function implementation remains the same
   }
 ```
-
-## Informational
-### [I-1]
-**Sumary:**
-
-**Vulnerability Details:**
-
-**Impact:**
-
-**Proof of Concept:**
-
-**Recommended Mitigation:**
