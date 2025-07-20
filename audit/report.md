@@ -392,3 +392,82 @@ if (order.tokenToSell == address(iWETH)) {
 }
 ```
 
+### [I-3] Inconsistent Order Existence Check + Code Quality Issue
+**Sumary:** The contract should check if an order exists by verifying the order ID, since order IDs start from 1 and any order with ID 0 definitively doesn't exist. The current implementation checks if the seller address is the zero address, which indirectly detects non-existent orders but is less explicit and potentially confusing.
+
+**Vulnerability Details:** The current implementation works correctly in normal circumstances since orders are properly initialized with valid seller addresses. Edge cases or future code changes could potentially cause confusion about the intent of the validation check
+```javascript
+function getOrder(uint256 _orderId) public view returns (Order memory orderDetails) {
+@>  if (orders[_orderId].seller == address(0)) revert OrderNotFound();
+    orderDetails = orders[_orderId];
+}
+​
+function amendSellOrder(
+    uint256 _orderId,
+    uint256 _newAmountToSell,
+    uint256 _newPriceInUSDC,
+    uint256 _newDeadlineDuration
+) public {
+    Order storage order = orders[_orderId];
+​
+@>  if (order.seller == address(0)) revert OrderNotFound(); // Check if order exists
+    if (order.seller != msg.sender) revert NotOrderSeller();
+    // ... rest of function
+}
+​
+function getOrderDetailsString(uint256 _orderId) public view returns (string memory details) {
+    Order storage order = orders[_orderId];
+@>  if (order.seller == address(0)) revert OrderNotFound(); // Check if order exists
+    // ... rest of function
+}
+```
+
+**Impact:**
+
+- Code clarity and maintainability are reduced due to indirect order existence checking
+- Potential for misunderstanding the validation logic during code reviews or future modifications
+- No direct impact on funds or core functionality under normal operation
+
+**Proof of Concept:** The issue stems from the contract's design where order IDs are explicitly managed to start from 1, making ID 0 a reliable indicator of non-existence. When an order is created, it's assigned an ID from `_nextOrderId` which begins at 1 and increments with each new order. This means any mapping lookup that returns an order with ID 0 represents an uninitialized/non-existent order.
+```javascript
+// Current check is indirect and less clear
+if (order.seller == address(0)) revert OrderNotFound();
+​
+// Since _nextOrderId starts at 1 in constructor:
+constructor(...) {
+    _nextOrderId = 1; // Start order IDs from 1
+}
+​
+// Any order with id == 0 definitively doesn't exist
+// This would be more explicit and intentional
+```
+
+**Recommended Mitigation:** The fix involves replacing the seller address check with an order ID check. Since order IDs start from 1 and are managed by the contract, checking `order.id == 0` provides a more explicit and semantically correct way to verify order existence. This change improves code readability and makes the validation logic more intentional and less prone to confusion.
+```diff
+function getOrder(uint256 _orderId) public view returns (Order memory orderDetails) {
+-   if (orders[_orderId].seller == address(0)) revert OrderNotFound();
++   if (orders[_orderId].id == 0) revert OrderNotFound();
+    orderDetails = orders[_orderId];
+}
+​
+function amendSellOrder(
+    uint256 _orderId,
+    uint256 _newAmountToSell,
+    uint256 _newPriceInUSDC,
+    uint256 _newDeadlineDuration
+) public {
+    Order storage order = orders[_orderId];
+​
+-   if (order.seller == address(0)) revert OrderNotFound();
++   if (order.id == 0) revert OrderNotFound();
+    if (order.seller != msg.sender) revert NotOrderSeller();
+    // ... rest of function
+}
+​
+function getOrderDetailsString(uint256 _orderId) public view returns (string memory details) {
+    Order storage order = orders[_orderId];
+-   if (order.seller == address(0)) revert OrderNotFound();
++   if (order.id == 0) revert OrderNotFound();
+    // ... rest of function
+}
+```
