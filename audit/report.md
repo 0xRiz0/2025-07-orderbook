@@ -90,28 +90,145 @@ src/
 | Critical | 0                      |
 | High     | 0                      |
 | Medium   | 0                      |
-| Low      | 0                      |
-| Info     | 0                      |
+| Low      | 1                      |
+| Info     | 2                      |
 | Gas      | 0                      |
 | Total    | 0                      |
 
 # Findings
-## High
-### [H-1]
-**Sumary:**
-**Vulnerability Details:**
-**Impact:**
-**Proof of Concept:**
-**Recommended Mitigation:**
-
-## Medium
-### [M-1]
-
 ## Low 
-### [L-1]
+### [L-1] Public Function Not Used Internally - Should Be External
+**Sumary:** Functions should use the most restrictive visibility modifier appropriate for their intended use to optimize gas consumption and improve code clarity. Several functions are marked as public but are never called internally within the contract, meaning they should be marked as external to reduce gas costs and improve the contract's interface design.
+
+**Vulnerability Details:** Gas inefficiency occurs on every function call since public functions generate additional code for internal accessibility. Code clarity issues arise when function visibility doesn't match actual usage patterns
+
+```javascript
+contract OrderBook is Ownable {
+    // @> Functions marked public but only called externally
+    function createSellOrder(
+        address _tokenAddress,
+        uint256 _amount,
+        uint256 _pricePerToken
+    ) public {
+        // Function implementation...
+    }
+​
+    function amendSellOrder(
+        uint256 _orderId,
+        uint256 _newAmount,
+        uint256 _newPricePerToken
+    ) public {
+        // @> Never called internally, should be external
+        // Function implementation...
+    }
+​
+    function cancelSellOrder(uint256 _orderId) public {
+        // @> Never called internally, should be external
+        // Function implementation...
+    }
+​
+    function buyOrder(uint256 _orderId) public {
+        // @> Never called internally, should be external
+        // Function implementation...
+    }
+​
+    function getOrder(uint256 _orderId) public view returns (Order memory orderDetails) {
+        // @> Never called internally, should be external
+        // Function implementation...
+    }
+​
+    function getOrderDetailsString(uint256 _orderId) public view returns (string memory details) {
+        // @> Never called internally, should be external
+        // Function implementation...
+    }
+}
+```
+
+**Impact:**
+
+- Increased gas costs for users calling these functions due to unnecessary internal call handling overhead
+- Reduced code maintainability and clarity as visibility modifiers don't accurately reflect function usage
+- Potential confusion for developers who might assume these functions are used internally when they are not
+- Larger contract bytecode size due to additional internal call handling code generation
+
+**Proof of Concept:**
+The gas difference between public and external functions can be demonstrated through gas consumption analysis:
+
+- **Gas Cost Analysis:** Public functions consume more gas because the compiler generates additional code to handle both internal and external calls:
+```javascript
+// Current implementation - higher gas cost
+function createSellOrder(
+    address _tokenAddress,
+    uint256 _amount,
+    uint256 _pricePerToken
+) public {
+    // Compiler generates code for both internal and external calls
+    // Even though internal calls never happen
+}
+​
+// Optimized implementation - lower gas cost  
+function createSellOrder(
+    address _tokenAddress,
+    uint256 _amount,
+    uint256 _pricePerToken
+) external {
+    // Compiler only generates code for external calls
+    // Reduces gas overhead
+}
+```
+
+**Recommended Mitigation:**
+Change the visibility of functions that are only called externally from `public` to `external` to optimize gas usage and improve code clarity:
+```diff
+- function createSellOrder(
++ function createSellOrder(
+      address _tokenAddress,
+      uint256 _amount,
+      uint256 _pricePerToken
+- ) public {
++ ) external {
+      // Function implementation remains the same
+  }
+​
+- function amendSellOrder(
++ function amendSellOrder(
+      uint256 _orderId,
+      uint256 _newAmount,
+      uint256 _newPricePerToken
+- ) public {
++ ) external {
+      // Function implementation remains the same
+  }
+​
+- function cancelSellOrder(uint256 _orderId) public {
++ function cancelSellOrder(uint256 _orderId) external {
+      // Function implementation remains the same
+  }
+​
+- function buyOrder(uint256 _orderId) public {
++ function buyOrder(uint256 _orderId) external {
+      // Function implementation remains the same
+  }
+​
+- function getOrder(uint256 _orderId) public view returns (Order memory orderDetails) {
++ function getOrder(uint256 _orderId) external view returns (Order memory orderDetails) {
+      // Function implementation remains the same
+  }
+​
+- function getOrderDetailsString(uint256 _orderId) public view returns (string memory details) {
++ function getOrderDetailsString(uint256 _orderId) external view returns (string memory details) {
+      // Function implementation remains the same
+  }
+```
 
 ## Informational
 ### [I-1]
+**Sumary:**
 
-## Gas 
-### [G-1]
+**Vulnerability Details:**
+
+**Impact:**
+
+**Proof of Concept:**
+
+**Recommended Mitigation:**
