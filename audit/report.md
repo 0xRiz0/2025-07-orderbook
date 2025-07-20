@@ -289,3 +289,106 @@ Change the visibility of functions that are only called externally from `public`
       // Function implementation remains the same
   }
 ```
+
+### [I-2] Empty Token Symbol Returned for Non-Standard Allowed Tokens
+**Sumary:** The getOrderDetailsString function is designed to return human-readable order details including a token symbol for the asset being sold. The function only handles three hardcoded tokens (wETH, wBTC, wSOL) but fails to provide a symbol for other tokens that may be allowed via setAllowedSellToken(), resulting in empty token symbols in the output string.
+
+**Vulnerability Details:** The owner can add new allowed tokens using setAllowedSellToken() at any time. Users can create sell orders for these newly allowed tokens through createSellOrder(). Any call to getOrderDetailsString() for orders with non-standard tokens will produce incomplete information.
+```javascript
+function getOrderDetailsString(uint256 _orderId) public view returns (string memory details) {
+    Order storage order = orders[_orderId];
+    if (order.seller == address(0)) revert OrderNotFound();
+​
+    string memory tokenSymbol;
+    if (order.tokenToSell == address(iWETH)) {
+        tokenSymbol = "wETH";
+    } else if (order.tokenToSell == address(iWBTC)) {
+        tokenSymbol = "wBTC";
+    } else if (order.tokenToSell == address(iWSOL)) {
+        tokenSymbol = "wSOL";
+    }
+    // @> No else clause - tokenSymbol remains empty for other allowed tokens
+    
+    details = string(
+        abi.encodePacked(
+            "Order ID: ",
+            order.id.toString(),
+            "\n",
+            "Seller: ",
+            Strings.toHexString(uint160(order.seller), 20),
+            "\n",
+            "Selling: ",
+            order.amountToSell.toString(),
+            " ",
+            tokenSymbol, // @> Will be empty string for non-standard tokens
+            "\n",
+            "Asking Price: ",
+            order.priceInUSDC.toString(),
+            " USDC\n"
+        )
+    );
+```
+
+**Impact:**
+
+-User interfaces consuming this function will display confusing order details with missing token information
+-Order details will show "Selling: 1000000 " instead of "Selling: 1000000 USDT" for example
+-This creates poor user experience and potential confusion about what asset is being traded
+
+**Proof of Concept:** As you can see from the console.log() the details contains an empty strings.
+```bash
+[PASS] test_emptyTokenSymbolForNonStandardTokens() (gas: 1270950)
+Logs:
+  Order Details:
+  Order ID: 1
+Seller: 0xaf6db259343d020e372f4ab69cad536aaf79d0ac
+Selling: 1000000 
+Asking Price: 1000000 USDC
+Deadline Timestamp: 86401
+Status: Active
+```
+```javascript
+function test_emptyTokenSymbolForNonStandardTokens() public {
+    // Deploy a new mock token (e.g., USDT)
+    MockUSDC usdt = new MockUSDC(6);
+    usdt.mint(alice, 1000000);
+    
+    // Owner adds the new token as allowed
+    vm.prank(owner);
+    book.setAllowedSellToken(address(usdt), true);
+    
+    // Alice creates an order with the new token
+    vm.startPrank(alice);
+    usdt.approve(address(book), 1000000);
+    uint256 orderId = book.createSellOrder(address(usdt), 1000000, 1000000, 1 days);
+    vm.stopPrank();
+    
+    // Get order details string
+    string memory details = book.getOrderDetailsString(orderId);
+    
+    // The output will contain "Selling: 1000000 " with empty token symbol
+    // Expected output should be "Selling: 1000000 USDT" or show the token address
+    console2.log("Order Details:");
+    console2.log(details);
+    
+    // Assert that the details contain empty space after the amount
+    // This demonstrates the missing token symbol issue
+    assertTrue(bytes(details).length > 0);
+}
+```
+
+**Recommended Mitigation:** Add a fallback mechanism to display the token address when no predefined symbol exists. This ensures users always know which token is being traded:
+```diff
+string memory tokenSymbol;
+if (order.tokenToSell == address(iWETH)) {
+    tokenSymbol = "wETH";
+} else if (order.tokenToSell == address(iWBTC)) {
+    tokenSymbol = "wBTC";
+} else if (order.tokenToSell == address(iWSOL)) {
+    tokenSymbol = "wSOL";
++} else {
++    // Fallback to showing the token address for non-standard tokens
++    tokenSymbol = Strings.toHexString(uint160(order.tokenToSell), 20);
+}
+```
+
